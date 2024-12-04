@@ -1,1 +1,59 @@
-
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-app
+  namespace: demo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      # Tolerations to match the taints in the NodePool
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "nginx"
+          effect: "NoSchedule"
+      # Node affinity to align with NodePool's requirements
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  # - key: "karpenter.k8s.aws/instance-type"
+                  #   operator: In
+                  #   values:
+                  #     - "m5.large"
+                  #     - "m5.xlarge"
+                  - key: "topology.kubernetes.io/zone"
+                    operator: In
+                    values:
+                      - "us-east-1a"
+                      - "us-east-1b"
+                  - key: "kubernetes.io/arch"
+                    operator: In
+                    values:
+                      - "amd64"
+                  - key: "app"
+                    operator: In
+                    values:
+                      - "nginx"
+      # nodeSelector:
+      #   dedicated: nginx
+      containers:
+        - name: nginx
+          image: nginx:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "10m"
+            limits:
+              memory: "256Mi"
+              cpu: "20m"
