@@ -1,1 +1,57 @@
+# Karpenter's EC2NodeClass is a Kubernetes Custom Resource Definition (CRD) that specifies the
+# configuration for provisioning Amazon EC2 instances within a cluster. It allows users to define 
+# parameters such as Amazon Machine Images (AMIs), networking settings,
+# storage options, and more, tailoring the infrastructure to the specific needs of their workloads.
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: nginx-ec2nodeclass
+spec:
+  # Specifies the AMI family for the nodes.
+  # AL2 refers to Amazon Linux 2, commonly used with EKS.
+  amiFamily: AL2
 
+  # AMI Selector Terms specify the AMIs to use for the nodes.
+  # Each term in the array is ORed together.
+  # Within a single term, all conditions are ANDed.
+  amiSelectorTerms:
+    # Selects an AMI by its alias (e.g., EKS optimized AMIs).
+    # Alternatively, you can specify by name, tags, or ID.
+    # - alias: "*"
+    - id: ami-03e3d5f1e9559ede2
+
+  # Subnet Selector Terms determine which subnets the nodes will be launched in.
+  subnetSelectorTerms:
+    # Selects subnets based on tags.
+    - tags:
+        Name: "eksctl-aws-karpenter-demo-cluster/SubnetPrivate*"  # Replace with your subnet name
+
+  # Security Group Selector Terms determine which security groups to attach to instances.
+  securityGroupSelectorTerms:
+    # Selects security groups based on tags.
+    - tags:
+        aws:eks:cluster-name: "aws-karpenter-demo"  # Replace with your cluster name
+
+  # Specifies the IAM role to associate with the nodes.
+  # Must specify one of "role" or "instanceProfile".
+  role: "KarpenterNodeRole-aws-karpenter-demo"  # Replace with your IAM role
+
+  # Optional: Propagates tags to underlying EC2 resources.
+  tags:
+    Environment: "development"
+    Application: "Nginx"
+
+  # Optional: Configures storage devices for the instance.
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 50Gi          # Size of the volume
+        volumeType: gp3           # Volume type
+        deleteOnTermination: true # Delete volume on instance termination
+
+  # Optional: Configures IMDS (Instance Metadata Service) for the instance.
+  metadataOptions:
+    httpEndpoint: enabled         #This enables the IMDS endpoint on the instance, allowing the instance to access metadata.
+    httpProtocolIPv6: disabled
+    httpTokens: required          # Requires session tokens for IMDS
+    httpPutResponseHopLimit: 2    # This sets the hop limit for PUT requests to the IMDS. It controls the number of network hops that the request can traverse, which can help mitigate certain types of network-based attacks.
