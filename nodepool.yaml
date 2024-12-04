@@ -1,1 +1,98 @@
+# Karpenter's NodePool is a Kubernetes Custom Resource Definition (CRD) that defines constraints 
+# and configurations for the nodes Karpenter provisions. It allows users to specify parameters 
+# such as instance types, availability zones, and resource
+# limits, ensuring that the nodes meet the specific requirements of the workloads they will support.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: nginx-nodepool
+spec:
+  # Template section to configure nodes provisioned by this NodePool
+  template:
+    metadata:
+      # Labels are arbitrary key-values that are applied to all nodes
+      labels:
+        app: nginx
+        environment: production
+      # Add metadata annotations for additional information that are applied to all nodes
+      annotations:
+        example.com/owner: "team-a"
+    spec:
+      # Reference the EC2NodeClass created earlier
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: nginx-ec2nodeclass
 
+      # Taints applied to provisioned nodes to control scheduling
+      taints:
+        - key: "dedicated"
+          value: "nginx"
+          effect: NoSchedule
+
+      # Lifetime of the node; after this period, nodes are replaced
+      # # Avoiding long-running Nodes helps to reduce security vulnerabilities as 
+      # well as to reduce the chance of issues that can plague Nodes with long uptimes 
+      # such as file fragmentation or memory leaks from system processes
+      # You can choose to disable expiration entirely by setting the string value 'Never' here
+
+      # Note: changing this value in the nodepool will drift the nodeclaims.
+      expireAfter: 720h  # Nodes live for 30 days
+
+      # Time a node has to drain before being forcibly terminated
+      #The amount of time a Node can be draining before Karpenter forcibly cleans up the node. 
+      # Pods blocking eviction like PDBs and do-not-disrupt will be respected during
+      # draining until the terminationGracePeriod is reached, where those pods will be forcibly deleted
+      terminationGracePeriod: 48h
+
+      # Requirements for the nodes provisioned by this NodePool
+      requirements:
+        # - key: "karpenter.k8s.aws/instance-type"
+        #   operator: In
+        #   values: ["m5.large", "m5.xlarge"]
+        # - key: karpenter.k8s.aws/instance-family
+        #   operator: In
+        #   values: ["m5","m5d","c5","c5d","c4","r4"]
+        # - key: "karpenter.k8s.aws/instance-hypervisor"
+        #   operator: In
+        #   values: ["nitro"]
+        # - key: "karpenter.k8s.aws/instance-category"
+        #   operator: In
+        #   values: ["c", "m", "r"]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["t3.micro", "t3.medium"]
+        - key: kubernetes.io/os
+          operator: In
+          values: ["linux"]
+        - key: "topology.kubernetes.io/zone"
+          operator: In
+          values: ["us-east-1a", "us-east-1b"]
+        - key: "kubernetes.io/arch"
+          operator: In
+          values: ["amd64"]
+        - key: "karpenter.sh/capacity-type"
+          operator: In
+          values: ["spot", "on-demand"]
+
+  # Disruption policies for node replacement and scaling
+  disruption:
+    # Policy for node consolidation to reduce costs
+    consolidationPolicy: WhenEmptyOrUnderutilized
+
+    # Time to wait before consolidating nodes after a pod change
+    consolidateAfter: 5m
+
+    # Budgets control the speed Karpenter can scale down nodes.
+    budgets:
+    - nodes: 10%  # Limit node disruption to 10% at a time
+
+  # Resource limits for the total NodePool size.Lets you set limits 
+  # on the total CPU and Memory that can be used by the cluster,
+  # effectively stopping further node provisioning when those limits have been reached.
+  limits:
+    cpu: "64"          # Maximum CPU across all nodes in this pool
+    memory: 256Gi      # Maximum memory across all nodes in this pool
+
+  # Weight for NodePool prioritization in scheduling
+  weight: 5
